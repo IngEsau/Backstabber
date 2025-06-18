@@ -5,7 +5,7 @@
 ## Instalación
 
 ```bash
-git clone git@github.com:<IngEsau>/RedEye-Toolkit.git
+git clone https://github.com/IngEsau/RedEye-Toolkit.git
 cd RedEye-Toolkit
 python3 -m venv venv
 source venv/bin/activate
