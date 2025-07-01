@@ -2,15 +2,6 @@
 
 **v1.0** — Herramienta modular de pentesting de redes (Escaneo + ARP Spoof) con GUI en Python + PyQt5.
 
-## Estructura de src
-
-src/
-  core/        # lógica de escaneo y spoof
-  gui/         # clases PyQt5
-  utils/       # utilerías comunes
-  __main__.py  # entry-point, para poder hacer `python -m redeye_toolkit`
-
-
 ## Instalación
 
 ```bash
