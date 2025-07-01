@@ -2,8 +2,8 @@
 
 **v1.0** — Herramienta modular de pentesting de redes (Escaneo + ARP Spoof) con GUI en Python + PyQt5.
 
+## Estructura de src
 
-```bash
 src/
   core/        # lógica de escaneo y spoof
   gui/         # clases PyQt5
