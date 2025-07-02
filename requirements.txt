@@ -2,9 +2,9 @@ markdown-it-py==3.0.0
 mdurl==0.1.2
 netifaces==0.11.0
 Pygments==2.19.1
-PyQt5==5.15.11
+PyQt5==5.15.7
 PyQt5-Qt5==5.15.17
 PyQt5_sip==12.17.0
 python-nmap==0.7.1
 rich==14.0.0
-scapy==2.6.1
+scapy==2.4.5

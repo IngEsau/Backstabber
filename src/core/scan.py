@@ -23,7 +23,7 @@ class ScanThread(QThread):
         masscan_proc.start(masscan_cmd[0], masscan_cmd[1:])
         masscan_proc.waitForFinished(-1)
         raw = masscan_proc.readAllStandardOutput().data().decode(errors='ignore')
-        self.result_line.emit("[Masscan] Pre-escaneo finalizado")
+        self.result_line.emit("[Masscan] Pre-scann finished")
 
         # Parsear puertos abiertos de la salida de Masscan
         open_entries = []  # lista de "IP:puerto"
@@ -42,7 +42,7 @@ class ScanThread(QThread):
             target_list = ','.join(open_entries)
         else:
             # si no hay resultados, escanear puertos comunes
-            self.result_line.emit("[Masscan] No se detectaron puertos abiertos, usando rango 1-1024")
+            self.result_line.emit("[Masscan] No ports open, used the range 1-1024")
             target_list = "1-1024"
 
         # 2) Escaneo refinado con Nmap solo sobre puertos detectados
@@ -58,7 +58,7 @@ class ScanThread(QThread):
             "-p", target_list,
             self.ip_range
         ]
-        self.result_line.emit(f"[Nmap] Ejecutando: {' '.join(nmap_cmd)}")
+        self.result_line.emit(f"[Nmap] Executing: {' '.join(nmap_cmd)}")
         self.proc = QProcess()
         self.proc.start(nmap_cmd[0], nmap_cmd[1:])
         self.proc.readyReadStandardOutput.connect(self._stdout)

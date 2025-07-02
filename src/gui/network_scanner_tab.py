@@ -15,13 +15,13 @@ class NetworkScannerTab(QWidget):
 
     def _build_ui(self):
         layout = QVBoxLayout()
-        layout.addWidget(QLabel("Ingrese el rango IP (ej. 192.168.1.0/24):"))
+        layout.addWidget(QLabel("Enter he IP range (e.g 192.168.1.0/24):"))
         self.input       = QLineEdit()
         layout.addWidget(self.input)
 
         btn_layout = QHBoxLayout()
-        self.scan_button   = QPushButton("Escanear Red")
-        self.cancel_button = QPushButton("Cancelar")
+        self.scan_button   = QPushButton("Scan")
+        self.cancel_button = QPushButton("Abort scan")
         self.cancel_button.setEnabled(False)
         btn_layout.addWidget(self.scan_button)
         btn_layout.addWidget(self.cancel_button)        
@@ -40,11 +40,11 @@ class NetworkScannerTab(QWidget):
     def scan_network(self):
         ip_range = self.input.text().strip()
         if not ip_range:
-            QMessageBox.warning(self, "Error", "Por favor ingrese un rango IP válido.")
+            QMessageBox.warning(self, "Error", "Please enter a valid IP range.")
             return
 
         self.output_area.clear()
-        self.output_area.append(f"Escaneando red: {ip_range}...\n")
+        self.output_area.append(f"Scanning network: {ip_range}...\n")
         self.scan_button.setEnabled(False)
         self.cancel_button.setEnabled(True)
 
@@ -56,12 +56,12 @@ class NetworkScannerTab(QWidget):
     def cancel_scan(self):
         if self.thread:
             self.thread.cancel()
-            self.output_area.append("\nEscaneo cancelado.\n")
+            self.output_area.append("\nAborted scann.\n")
 
     def on_scan_finished(self):
         self.scan_button.setEnabled(True)
         self.cancel_button.setEnabled(False)
-        self.output_area.append("Proceso finalizado.\n")
+        self.output_area.append("Success.\n")
 
         text = self.output_area.toPlainText()
         self.hosts = [
