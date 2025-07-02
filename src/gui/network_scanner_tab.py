@@ -8,6 +8,7 @@ class NetworkScannerTab(QWidget):
     hosts = []
 
     def __init__(self):
+        self.scan_completed_callback = lambda hosts, output: None
         super().__init__()
         self._build_ui()
         self.thread = None
@@ -62,9 +63,12 @@ class NetworkScannerTab(QWidget):
         self.cancel_button.setEnabled(False)
         self.output_area.append("Proceso finalizado.\n")
 
-        # Extraer hosts
         text = self.output_area.toPlainText()
-        self.hosts = [ line.split()[-1]
+        self.hosts = [
+            line.split()[-1]
             for line in text.splitlines()
             if line.startswith("Nmap scan report for ")
         ]
+        
+        if hasattr(self, 'scan_completed_callback'):
+            self.scan_completed_callback(self.hosts, text)
