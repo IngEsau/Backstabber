@@ -1,8 +1,8 @@
-# RedEye Toolkit
+# Backstabber Toolkit
 
 &#x20;
 
-**RedEye Toolkit** es una solución modular de pentesting de redes, desarrollada en Python con interfaz gráfica en PyQt5. Su arquitectura permite expandir funcionalidades de forma sencilla, integrando ahora capacidades de captura y análisis de paquetes (ARP Poisoning).
+**Backstabber Toolkit** es una solución modular de pentesting de redes, desarrollada en Python con interfaz gráfica en PyQt5. Su arquitectura permite expandir funcionalidades de forma sencilla, integrando ahora capacidades de captura y análisis de paquetes (ARP Poisoning).
 
 ---
 
@@ -18,8 +18,8 @@
 ## 🛠 Instalación
 
 ```bash
-git clone https://github.com/IngEsau/RedEye-Toolkit.git
-cd RedEye-Toolkit
+git clone https://github.com/IngEsau/Backstabber.git
+cd Backstabber
 python3 -m venv venv
 source venv/bin/activate    # Linux/macOS
 venv\Scripts\activate     # Windows
