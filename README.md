@@ -59,7 +59,7 @@ Se agradecen sugerencias y mejoras. Para colaborar:
 
 ## 📄 Licencia
 
-Este proyecto está bajo la licencia MIT. Consulta el archivo [LICENSE](LICENSE) para más detalles.
+Este proyecto está bajo la licencia MIT. Consulta el archivo [LICENSE](./LICENSE) para más detalles.
 
 ---
 
