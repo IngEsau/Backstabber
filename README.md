@@ -2,7 +2,7 @@
 
 &#x20;
 
-**RedEye Toolkit** es una solución modular de pentesting de redes, desarrollada en Python con interfaz gráfica en PyQt5. Su arquitectura permite expandir funcionalidades de forma sencilla, integrando ahora capacidades de captura y análisis de paquetes (ARP Poisoning y víakintegración con Pyshark).
+**RedEye Toolkit** es una solución modular de pentesting de redes, desarrollada en Python con interfaz gráfica en PyQt5. Su arquitectura permite expandir funcionalidades de forma sencilla, integrando ahora capacidades de captura y análisis de paquetes (ARP Poisoning).
 
 ---
 
