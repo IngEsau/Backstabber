@@ -40,7 +40,6 @@ pip install -r requirements.txt
 
    - **Network Scan**: Configura rango de IP y puertos.
    - **ARP Poison**: Define IP víctima y gateway.
-   - **Packet Capture**: Inicia captura en tiempo real.
 
 3. Para detener operaciones, utiliza los botones "Stop" correspondientes.
 
