@@ -1,7 +1,7 @@
 from PyQt5.QtCore import QThread, pyqtSignal
 import asyncio
 import ipaddress
-from scapy.all import ARP, Ether, srp, ICMP, IP, sr1, TCP, conf, send, get_if_addr
+from scapy.all import ARP, Ether, srp, ICMP, IP, sr1, TCP, conf, send, get_if_addr, get_working_if
 import logging
 
 
@@ -28,15 +28,29 @@ class AsyncScanner(QThread):
         super().__init__(parent)
         self.ip_range = ip_range
         self.ports = self._parse_ports(ports)
-        self.iface = iface or conf.iface
+        self.iface = iface
         self._cancel_requested = False
         self.total_hosts = 0
         self.completed_hosts = 0
         
         # Configuración de Scapy
         conf.verb = 0    
+        self._configure_scapy_interface()
         _fix_scapy_routing()
 
+    def _configure_scapy_interface(self):
+        """Configura la interfaz de red para Scapy"""
+        try:
+            if not self.iface:
+                self.iface = get_working_if()            
+            conf.iface = self.iface                
+            if_addr = get_if_addr(self.iface)
+            if if_addr and "0.0.0.0" not in if_addr:
+                conf.route.add(net="0.0.0.0/0", gw="0.0.0.0", dev=self.iface)                
+            self.result_line.emit(f"[*] Using network interface: {self.iface}")
+        except Exception as e:
+            self.result_line.emit(f"[!] Interface error: {str(e)}")
+        
     def _parse_ports(self, port_str):
         """Convierte una cadena de puertos en una lista de enteros"""
         ports = set()
@@ -67,7 +81,7 @@ class AsyncScanner(QThread):
             self.result_line.emit(f"[!] Invalid IP range: {self.ip_range}")
             return []
 
-        # Escaneo ARP (redes locales)
+        # Escaneo ARP (redes locales: usando iface)
         try:
             arp = ARP(pdst=self.ip_range)
             ether = Ether(dst="ff:ff:ff:ff:ff:ff")
@@ -101,7 +115,7 @@ class AsyncScanner(QThread):
         try:
             packet = IP(dst=ip)/ICMP()
             # Ejecutar en hilo separado (sr1 es bloqueante)
-            response = await asyncio.to_thread(sr1, packet, timeout=1, verbose=0, iface=self.iface)
+            response = await asyncio.to_thread(sr1, packet, timeout=1, verbose=0)
             return (ip, response is not None)
         except Exception as e:
             logger.error(f"Error en ping a {ip}: {e}")
@@ -127,7 +141,7 @@ class AsyncScanner(QThread):
                 try:
                     packet = IP(dst=host)/TCP(dport=port, flags="S")
                     #Hilo separado
-                    response = await asyncio.to_thread(sr1, packet, timeout=1, verbose=0, iface=self.iface)
+                    response = await asyncio.to_thread(sr1, packet, timeout=1, verbose=0)
                     
                     if response and response.haslayer(TCP):
                         flags = response.getlayer(TCP).flags
