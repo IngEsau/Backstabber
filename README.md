@@ -1,6 +1,3 @@
-<<<<<<< IMTEM
-
-=======
 # Backstabber Toolkit
 
 **Backstabber Toolkit** is a modular network pentesting solution developed in Python, featuring a graphical user interface built with PyQt5. Its architecture is designed for scalability, allowing for easy integration of additional modules. It currently includes network scanning capabilities and ARP packet interception through spoofing.
@@ -64,4 +61,3 @@ This project is licensed under the MIT License. See the [LICENSE](./LICENSE) fil
 ---
 
 **Developed by Esaú Aguilar — RedEye Toolkit © 2025**
->>>>>>> main
