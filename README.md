@@ -60,4 +60,4 @@ This project is licensed under the MIT License. See the [LICENSE](./LICENSE) fil
 
 ---
 
-**Developed by Esaú Aguilar — RedEye Toolkit © 2025**
+**Developed by Esaú Aguilar — Backstabber Toolkit © 2025**
