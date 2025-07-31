@@ -9,8 +9,8 @@ from core.scan import AsyncScanner
 class NetworkScannerTab(QWidget):
     hosts = []
 
-    def __init__(self):
-        self.scan_completed_callback = lambda hosts, output: None
+    def __init__(self):    
+        self.scan_completed_callback = lambda hosts, output: None    
         super().__init__()
         self._build_ui()
         self.scanner_thread = None
@@ -18,12 +18,17 @@ class NetworkScannerTab(QWidget):
 
     def _build_ui(self):
         layout = QVBoxLayout()
-        
+
         # Campo de entrada para rango IP
         layout.addWidget(QLabel("Enter the IP range (e.g 192.168.1.0/24):"))
         self.input = QLineEdit()
         self.input.setPlaceholderText("192.168.1.0/24")
         layout.addWidget(self.input)
+
+        layout.addWidget(QLabel("Network Interface (optional):"))
+        self.iface_input = QLineEdit()
+        self.iface_input.setPlaceholderText("e.g., eth0, en0, wlan0")
+        layout.addWidget(self.iface_input)
         
         # Campo de entrada para puertos
         layout.addWidget(QLabel("Ports to scan (e.g 22,80,443 or 1-1024):"))
@@ -69,8 +74,9 @@ class NetworkScannerTab(QWidget):
         self.cancel_button.clicked.connect(self.cancel_scan)
 
     def start_scan(self):
-        ip_range = self.input.text().strip()
+        ip_range = self.input.text().strip()        
         ports = self.ports_input.text().strip()
+        self.scanner_thread = AsyncScanner(ip_range, ports, iface=iface)
         
         if not ip_range:
             QMessageBox.warning(self, "Error", "Please enter a valid IP range.")
@@ -79,6 +85,11 @@ class NetworkScannerTab(QWidget):
         if not ports:
             QMessageBox.warning(self, "Error", "Please enter valid ports to scan.")
             return
+        
+        iface = self.iface_input.text().strip() or None
+        # Crear y configurar el hilo de escaneo
+
+        self.scanner_thread = AsyncScanner(ip_range=ip_range, ports=ports, iface=iface)
 
         # Preparar la interfaz para el escaneo
         self.output_area.clear()
@@ -92,8 +103,6 @@ class NetworkScannerTab(QWidget):
         self.output_area.append(f"[*] Starting network scan: {ip_range}")
         self.output_area.append(f"[*] Scanning ports: {ports}")
         
-        # Crear y configurar el hilo de escaneo
-        self.scanner_thread = AsyncScanner(ip_range, ports)
         
         # Conectar señales
         self.scanner_thread.result_line.connect(self.output_area.append)
@@ -113,10 +122,15 @@ class NetworkScannerTab(QWidget):
     def update_progress(self, completed, total):
         """Actualiza la barra de progreso con el estado del escaneo"""
         if total > 0:
+            percent = int((completed / total) * 100) if total > 0 else 0
+            progress_text = f"Scanning: {percent}% ({completed}/{total} hosts)"
+
+            #Actualización de la barra
             self.progress_bar.setMaximum(total)
             self.progress_bar.setValue(completed)
-            percent = int((completed / total) * 100)
-            self.progress_bar.setFormat(f"Scanning: {percent}% ({completed}/{total} hosts)")
+            self.progress_bar.setFormat(progress_text)
+
+            self.progress_bar.repaint()
 
     def add_host_to_table(self, host, open_ports):
         """Añade un host descubierto a la tabla de resultados"""
