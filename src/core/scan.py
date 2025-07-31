@@ -117,9 +117,13 @@ class AsyncScanner(QThread):
             # Ejecutar en hilo separado (sr1 es bloqueante)
             response = await asyncio.to_thread(sr1, packet, timeout=1, verbose=0)
             return (ip, response is not None)
+        except OSError as e:
+            if e.errno == 9:
+                return (ip, False)
+            else:
+                raise
         except Exception as e:
-            logger.error(f"Error en ping a {ip}: {e}")
-            return (ip, False)
+            return(ip, False)
 
     async def _scan_ports(self, host):
         """Escanea puertos TCP en un host específico de forma asíncrona"""
@@ -147,11 +151,21 @@ class AsyncScanner(QThread):
                         flags = response.getlayer(TCP).flags
                         if flags == 0x12:  # SYN-ACK
                             # Enviar RST para cerrar la conexión
-                            rst_pkt = IP(dst=host)/TCP(dport=port, flags="R")
-                            await asyncio.to_thread(send, rst_pkt, verbose=0)
-                            return port
-                except Exception as e:
-                    logger.debug(f"Error on port {port}: {e}")
+                            try:
+                                rst_pkt = IP(dst=host)/TCP(dport=port, flags="R")
+                                await asyncio.to_thread(send, rst_pkt, verbose=0)
+                                return port
+                            except OSError as e:
+                                if e.errno != 9:
+                                    raise
+                                return port
+                except OSError as e:
+                    if e.errno == 9:
+                        return None
+                    else:
+                        raise
+                except Exception:
+                    pass
                 return None
         
         # Crear y ejecutar tareas para todos los puertos
