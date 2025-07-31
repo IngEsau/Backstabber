@@ -9,8 +9,8 @@ from core.scan import AsyncScanner
 class NetworkScannerTab(QWidget):
     hosts = []
 
-    def __init__(self):
-        self.scan_completed_callback = lambda hosts, output: None
+    def __init__(self):    
+        self.scan_completed_callback = lambda hosts, output: None    
         super().__init__()
         self._build_ui()
         self.scanner_thread = None
@@ -18,12 +18,17 @@ class NetworkScannerTab(QWidget):
 
     def _build_ui(self):
         layout = QVBoxLayout()
-        
+
         # Campo de entrada para rango IP
         layout.addWidget(QLabel("Enter the IP range (e.g 192.168.1.0/24):"))
         self.input = QLineEdit()
         self.input.setPlaceholderText("192.168.1.0/24")
         layout.addWidget(self.input)
+
+        layout.addWidget(QLabel("Network Interface (optional):"))
+        self.iface_input = QLineEdit()
+        self.iface_input.setPlaceholderText("e.g., eth0, en0, wlan0")
+        layout.addWidget(self.iface_input)
         
         # Campo de entrada para puertos
         layout.addWidget(QLabel("Ports to scan (e.g 22,80,443 or 1-1024):"))
@@ -70,6 +75,8 @@ class NetworkScannerTab(QWidget):
 
     def start_scan(self):
         ip_range = self.input.text().strip()
+        iface = self.iface_input.text().strip() or None
+        self.scanner_thread = AsyncScanner(ip_range, ports, iface=iface)
         ports = self.ports_input.text().strip()
         
         if not ip_range:
