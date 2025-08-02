@@ -17,11 +17,38 @@ class ARPSpoofThread(QThread):
         self.interval   = interval
         self.running    = True
 
-    def restore_arp(self, iface, tmac, gmac):
-        sendp(Ether(dst=tmac)/ARP(op=2, pdst=self.target_ip, psrc=self.gateway_ip, hwsrc=gmac),
-              iface=iface, verbose=False)
-        sendp(Ether(dst=gmac)/ARP(op=2, pdst=self.gateway_ip, psrc=self.target_ip, hwsrc=tmac),
-              iface=iface, verbose=False)
+    def restore_arp(self, iface, tmac, gmac, max_attempts=3):
+        """
+        Sends multiple ARP packets to restore tables and automatically verifies restoration.
+        """
+        for attempt in range(max_attempts):
+            for _ in range(7):  # More repetitions for reliability
+                sendp(Ether(dst=tmac)/ARP(op=2, pdst=self.target_ip, psrc=self.gateway_ip, hwsrc=gmac),
+                      iface=iface, verbose=False)
+                sendp(Ether(dst=gmac)/ARP(op=2, pdst=self.gateway_ip, psrc=self.target_ip, hwsrc=tmac),
+                      iface=iface, verbose=False)
+                self.msleep(200)  # Wait between packets
+
+            # Verify restoration
+            if self.check_arp_restored(iface, tmac, gmac):
+                print("[+] ARP restoration successful.")
+                return
+            else:
+                print(f"[!] ARP restoration attempt {attempt+1} failed, retrying...")
+
+        print("[!] ARP restoration failed after multiple attempts.")
+
+    def check_arp_restored(self, iface, tmac, gmac):
+        """
+        Checks if the ARP tables of the target and gateway no longer point to the attacker's MAC.
+        """
+        # Check on the target
+        arp_req = Ether(dst=tmac) / ARP(op=1, pdst=self.gateway_ip)
+        ans, _ = srp(arp_req, iface=iface, timeout=2, retry=1, verbose=False)
+        for _, resp in ans:
+            if resp.hwsrc.lower() != get_if_hwaddr(iface).lower():
+                return True
+        return False
 
     def run(self):
         iface   = conf.iface

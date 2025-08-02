@@ -129,7 +129,6 @@ class ARPSpoofTab(QWidget):
         QTimer.singleShot(4000, lambda: self.verify_spoof_success(target_ip, gateway))
 
     def verify_spoof_success(self, victim_ip, gateway_ip):
-        """Usa la nueva función para chequear la caché ARP de la víctima."""
         if check_arp_spoof_success(victim_ip, gateway_ip):
             self.log_area.append("[✔] ARP Spoofing is working properly.")
         else:
@@ -144,6 +143,7 @@ class ARPSpoofTab(QWidget):
         if self.thread:
             self.thread.stop()
             self.thread.wait()
+            self.thread = None  # Clear thread reference
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
         self.log_area.append("[✘] ARP spoofing stopped.")

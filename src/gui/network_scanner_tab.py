@@ -117,7 +117,7 @@ class NetworkScannerTab(QWidget):
             self.finalize_scan()
 
     def update_progress(self, completed, total):
-        """Actualiza la barra de progreso con el estado del escaneo"""
+        """Update the progress bar with the current scan status."""
         if total > 0:
             percent = int((completed / total) * 100) if total > 0 else 0
             progress_text = f"Scanning: {percent}% ({completed}/{total} hosts)"
@@ -151,7 +151,6 @@ class NetworkScannerTab(QWidget):
         self.result_table.resizeRowsToContents()
 
     def on_scan_finished(self):
-        """Maneja la finalización del escaneo"""
         self.output_area.append("\n[+] Scan completed successfully\n")
         self.finalize_scan()
         
