@@ -1,4 +1,6 @@
 # src/gui/arp_spoof_tab.py
+import os
+import datetime
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QLineEdit,
@@ -21,6 +23,7 @@ class ARPSpoofTab(QWidget):
         self.check_attempts = 0
         self.max_attempts   = 3
         self.best_target_ip = None
+        os.makedirs("logs", exist_ok=True)
         self._build_ui()
 
     def _build_ui(self):
@@ -124,20 +127,28 @@ class ARPSpoofTab(QWidget):
         self.thread.start()
         self.start_button.setEnabled(False)
         self.stop_button.setEnabled(True)
-        self.log_area.append(f"[✔] ARP spoofing started against {target_ip}.")
+        self.log_message(f"[✔] ARP spoofing started against {target_ip}.")
         self.check_attempts = 0
         QTimer.singleShot(4000, lambda: self.verify_spoof_success(target_ip, gateway))
 
+    def log_message(self, message: str):
+        timestamp = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
+        full_msg = f"{timestamp}\n{message}"
+        self.log_area.append(full_msg)
+        with open("logs/arp_spoof_log.txt", "a") as f:
+            f.write(full_msg + "\n")
+
     def verify_spoof_success(self, victim_ip, gateway_ip):
         if check_arp_spoof_success(victim_ip, gateway_ip):
-            self.log_area.append("[✔] ARP Spoofing is working properly.")
+            self.log_message("[✔] ARP Spoofing is working properly.")
         else:
             self.check_attempts += 1
             if self.check_attempts < self.max_attempts:
-                self.log_area.append("[…] Verification failed, retrying...")
+                self.log_message("[…] Verification failed, retrying...")
                 QTimer.singleShot(3000, lambda: self.verify_spoof_success(victim_ip, gateway_ip))
             else:
-                self.log_area.append("[✖] Spoofing not detected after multiple attempts.")
+                self.log_message("[✖] Spoofing not detected after multiple attempts.")
+                self.log_message("WARNING: This network may not be suitable for ARP poisoning.")
 
     def stop_spoof(self):
         if self.thread:
@@ -146,7 +157,7 @@ class ARPSpoofTab(QWidget):
             self.thread = None  # Clear thread reference
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
-        self.log_area.append("[✘] ARP spoofing stopped.")
+        self.log_message("[✘] ARP spoofing stopped.")
 
     def on_thread_finished(self):
-        self.log_area.append("[✔] ARP table restored.")
+        self.log_message("[✔] ARP table restored.")

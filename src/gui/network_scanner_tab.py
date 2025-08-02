@@ -1,3 +1,5 @@
+import os
+import datetime
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, 
     QTextEdit, QMessageBox, QHBoxLayout, QProgressBar,
@@ -15,6 +17,10 @@ class NetworkScannerTab(QWidget):
         self._build_ui()
         self.scanner_thread = None
         self.scan_results = {}  # Dictionary to store results: {host: [ports]}
+        self.gateway_ip = None  # Store gateway IP if available
+
+        # Ensure logs directory exists
+        os.makedirs("logs", exist_ok=True)
 
     def _build_ui(self):
         layout = QVBoxLayout()
@@ -113,6 +119,7 @@ class NetworkScannerTab(QWidget):
     def cancel_scan(self):
         if self.scanner_thread and self.scanner_thread.isRunning():
             self.scanner_thread.cancel()
+            self.scanner_thread.wait()  # Wait for the thread to finish
             self.output_area.append("\n[!] Scan aborted by user\n")
             self.finalize_scan()
 
@@ -150,24 +157,62 @@ class NetworkScannerTab(QWidget):
         
         self.result_table.resizeRowsToContents()
 
-    def on_scan_finished(self):
-        self.output_area.append("\n[+] Scan completed successfully\n")
-        self.finalize_scan()
-        
-        text = self.output_area.toPlainText()
-        self.hosts = list(self.scan_results.keys())
-        
-        if hasattr(self, 'scan_completed_callback'):
-            self.scan_completed_callback(self.hosts, text)
+    def log_message(self, message: str):
+        timestamp = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
+        full_msg = f"{timestamp} {message}"
+        self.output_area.append(full_msg)
+        with open("logs/network_scan_log.txt", "a") as f:
+            f.write(full_msg + "\n")
 
+    def analyze_network(self):
+        hosts = self.hosts
+        ports_per_host = self.scan_results
+        total_hosts = len(hosts)
+        total_ports = sum(len(ports) for ports in ports_per_host.values())
+        active_subnets = set('.'.join(host.split('.')[:3]) for host in hosts)  # Simple /24 subnet count
+
+        # Find ARP poisoning candidates (same subnet, not gateway)
+        gateway = self.gateway_ip
+        arp_candidates = [h for h in hosts if h != gateway and self.in_same_subnet(h, gateway)]
+
+        summary = []
+        summary.append(f"Network scan summary ({datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}):")
+        summary.append(f"Total hosts discovered: {total_hosts}")
+        summary.append(f"Total open ports found: {total_ports}")
+        summary.append(f"Active subnets detected: {len(active_subnets)}")
+        summary.append(f"ARP poisoning candidates: {', '.join(arp_candidates) if arp_candidates else 'None'}")
+        if not arp_candidates:
+            summary.append("WARNING: No suitable hosts for ARP poisoning detected.")
+        summary.append("Recommended for Wireshark: Capture traffic on the main interface during scan.")
+        summary.append("Recommended for Metasploit: Use discovered hosts and open ports for targeted exploits.")
+
+        summary_text = "\n".join(summary)
+        self.log_message(summary_text)
+        with open("logs/network_analysis_summary.txt", "w") as f:
+            f.write(summary_text)
+
+    def export_scan_data(self):
+        with open("logs/scan_results_for_tools.txt", "w") as f:
+            for host, ports in self.scan_results.items():
+                f.write(f"{host}: {','.join(map(str, ports))}\n")
+
+    def in_same_subnet(self, ip1, ip2):
+        # Simple /24 subnet check
+        return '.'.join(ip1.split('.')[:3]) == '.'.join(ip2.split('.')[:3])
+    
     def finalize_scan(self):
-        """ Restores the interface state after scanning """
         self.scan_button.setEnabled(True)
         self.cancel_button.setEnabled(False)
         self.progress_bar.setVisible(False)
-        
-        # Clear reference to thread
-        if self.scanner_thread:
-            self.scanner_thread.quit()
-            self.scanner_thread.wait()
-            self.scanner_thread = None
+
+    def on_scan_finished(self):
+        self.log_message("[+] Scan completed successfully")
+        self.finalize_scan()
+        self.hosts = list(self.scan_results.keys())
+        # Try to get gateway from scan results if available
+        if self.hosts:
+            self.gateway_ip = self.hosts[0]  # You may want to improve this logic
+        if hasattr(self, 'scan_completed_callback'):
+            self.scan_completed_callback(self.hosts, self.output_area.toPlainText())
+        self.analyze_network()
+        self.export_scan_data()
