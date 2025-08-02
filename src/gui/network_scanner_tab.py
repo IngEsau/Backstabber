@@ -14,12 +14,12 @@ class NetworkScannerTab(QWidget):
         super().__init__()
         self._build_ui()
         self.scanner_thread = None
-        self.scan_results = {}  # Diccionario para almacenar resultados: {host: [puertos]}
+        self.scan_results = {}  # Dictionary to store results: {host: [ports]}
 
     def _build_ui(self):
         layout = QVBoxLayout()
 
-        # Campo de entrada para rango IP
+        # Input field to IP range
         layout.addWidget(QLabel("Enter the IP range (e.g 192.168.1.0/24):"))
         self.input = QLineEdit()
         self.input.setPlaceholderText("192.168.1.0/24")
@@ -30,14 +30,14 @@ class NetworkScannerTab(QWidget):
         self.iface_input.setPlaceholderText("e.g., eth0, en0, wlan0")
         layout.addWidget(self.iface_input)
         
-        # Campo de entrada para puertos
+        # Input field to ports
         layout.addWidget(QLabel("Ports to scan (e.g 22,80,443 or 1-1024):"))
         self.ports_input = QLineEdit()
         self.ports_input.setPlaceholderText("1-1024")
-        self.ports_input.setText("1-1024")  # Valor por defecto
+        self.ports_input.setText("1-1024") 
         layout.addWidget(self.ports_input)
 
-        # Botones de control
+        # Control buttons
         btn_layout = QHBoxLayout()
         self.scan_button = QPushButton("Start Scan")
         self.cancel_button = QPushButton("Abort Scan")
@@ -46,14 +46,14 @@ class NetworkScannerTab(QWidget):
         btn_layout.addWidget(self.cancel_button)
         layout.addLayout(btn_layout)
         
-        # Barra de progreso
+        # Progressbar
         self.progress_bar = QProgressBar()
         self.progress_bar.setAlignment(Qt.AlignCenter)
         self.progress_bar.setFormat("Scanning: %p%")
         self.progress_bar.setVisible(False)
         layout.addWidget(self.progress_bar)
         
-        # Área de resultados (tabla)
+        # Results area (table)
         self.result_table = QTableWidget()
         self.result_table.setColumnCount(2)
         self.result_table.setHorizontalHeaderLabels(["Host", "Open Ports"])
@@ -62,14 +62,13 @@ class NetworkScannerTab(QWidget):
         self.result_table.setEditTriggers(QTableWidget.NoEditTriggers)
         layout.addWidget(self.result_table)
         
-        # Área de salida de texto
+
         self.output_area = QTextEdit()
         self.output_area.setReadOnly(True)
         layout.addWidget(self.output_area)
 
         self.setLayout(layout)
 
-        # Conexiones de botones
         self.scan_button.clicked.connect(self.start_scan)
         self.cancel_button.clicked.connect(self.cancel_scan)
 
@@ -88,7 +87,6 @@ class NetworkScannerTab(QWidget):
             QMessageBox.warning(self, "Error", "Please enter valid ports to scan.")
             return
             
-        # Preparar la interfaz para el escaneo
         self.output_area.clear()
         self.result_table.setRowCount(0)
         self.scan_results = {}
@@ -102,17 +100,14 @@ class NetworkScannerTab(QWidget):
         if iface:
             self.output_area.append(f"[*] Using network interface: {iface}")
         
-        # Crear y configurar el hilo de escaneo
-
         self.scanner_thread = AsyncScanner(ip_range, ports, iface=iface)
         
-        # Conectar señales
         self.scanner_thread.result_line.connect(self.output_area.append)
         self.scanner_thread.host_discovered.connect(self.add_host_to_table)
         self.scanner_thread.progress_update.connect(self.update_progress)
         self.scanner_thread.finished.connect(self.on_scan_finished)
         
-        # Iniciar el escaneo
+        # Start scan
         self.scanner_thread.start()
 
     def cancel_scan(self):
@@ -127,7 +122,6 @@ class NetworkScannerTab(QWidget):
             percent = int((completed / total) * 100) if total > 0 else 0
             progress_text = f"Scanning: {percent}% ({completed}/{total} hosts)"
 
-            #Actualización de la barra
             self.progress_bar.setMaximum(total)
             self.progress_bar.setValue(completed)
             self.progress_bar.setFormat(progress_text)
@@ -135,11 +129,11 @@ class NetworkScannerTab(QWidget):
             self.progress_bar.repaint()
 
     def add_host_to_table(self, host, open_ports):
-        """Añade un host descubierto a la tabla de resultados"""
-        # Almacenar resultados para el callback
+        """Add a discovered host to the results table"""
+        # Store results for the callback
         self.scan_results[host] = open_ports
         
-        # Añadir fila a la tabla
+        # Add row to table
         row_position = self.result_table.rowCount()
         self.result_table.insertRow(row_position)
         
@@ -148,13 +142,12 @@ class NetworkScannerTab(QWidget):
         host_item.setFlags(host_item.flags() ^ Qt.ItemIsEditable)
         self.result_table.setItem(row_position, 0, host_item)
         
-        # Puertos abiertos
+        # PORTS OPEN
         ports_str = ", ".join(map(str, open_ports))
         ports_item = QTableWidgetItem(ports_str)
         ports_item.setFlags(ports_item.flags() ^ Qt.ItemIsEditable)
         self.result_table.setItem(row_position, 1, ports_item)
         
-        # Auto-ajustar filas
         self.result_table.resizeRowsToContents()
 
     def on_scan_finished(self):
@@ -162,7 +155,6 @@ class NetworkScannerTab(QWidget):
         self.output_area.append("\n[+] Scan completed successfully\n")
         self.finalize_scan()
         
-        # Llamar al callback si existe
         text = self.output_area.toPlainText()
         self.hosts = list(self.scan_results.keys())
         
@@ -170,12 +162,12 @@ class NetworkScannerTab(QWidget):
             self.scan_completed_callback(self.hosts, text)
 
     def finalize_scan(self):
-        """Restaura el estado de la interfaz después del escaneo"""
+        """ Restores the interface state after scanning """
         self.scan_button.setEnabled(True)
         self.cancel_button.setEnabled(False)
         self.progress_bar.setVisible(False)
         
-        # Limpiar referencia al hilo
+        # Clear reference to thread
         if self.scanner_thread:
             self.scanner_thread.quit()
             self.scanner_thread.wait()

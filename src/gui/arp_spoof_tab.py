@@ -62,30 +62,29 @@ class ARPSpoofTab(QWidget):
         self.log_area.setReadOnly(True)
         layout.addWidget(self.log_area)
 
-        # Conexiones de botones
+        # Conection buttons
         self.start_button.clicked.connect(self.start_spoof)
         self.stop_button.clicked.connect(self.stop_spoof)
 
         self.setLayout(layout)
 
     def _on_dropdown_change(self):
-        # Cuando el usuario elige host, lo colocamos en el input
+        # When the user chooses any host, it adds it to input.
         ip = self.discovered_combo.currentText()
         if ip:
-            # solo llenamos el campo, no reseteamos sugerencia
             self.target_ip_input.setText(ip)
 
     def populate_after_scan(self, hosts, raw_output):
         """
-        Llamar desde main_window cuando acaba el escaneo:
-         - llena el dropdown
-         - calcula la mejor IP y la colorea
+        Call from main_window when the scan is complete:
+
+        - fill the dropdown
+        - calculate the best IP and color it
         """
         self.discovered_combo.clear()
         for ip in hosts:
             self.discovered_combo.addItem(ip)
 
-        # calculamos la sugerencia
         own_ip    = get_if_hwaddr(conf.iface)
         gateway   = self.gateway_combo.currentText()
         best_ip   = evaluate_best_target(raw_output, hosts, own_ip, gateway)
@@ -96,7 +95,6 @@ class ARPSpoofTab(QWidget):
             self.suggestion_label.setText(
                 f"Suggested: {best_ip} (most open ports)"
             )
-            # seleccionamos automaticamente la sugerida
             idx = self.discovered_combo.findText(best_ip)
             if idx != -1:
                 self.discovered_combo.setCurrentIndex(idx)
