@@ -7,7 +7,7 @@ from gui.arp_spoof_tab       import ARPSpoofTab
 class RedEyeMainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("RedEye - Toolkit")
+        self.setWindowTitle("Backstabber - Toolkit")
         self.setGeometry(200, 200, 800, 600)
 
         tabs = QTabWidget()
