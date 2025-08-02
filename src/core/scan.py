@@ -10,7 +10,6 @@ logger = logging.getLogger(__name__)
 logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
 
 def _fix_scapy_routing():
-    """ Soluciona el problema de ruteo en Scapy"""
     try:
         if_addr = get_if_addr(conf.iface)
         if if_addr and "0.0.0.0" not in if_addr:
@@ -33,13 +32,12 @@ class AsyncScanner(QThread):
         self.total_hosts = 0
         self.completed_hosts = 0
         
-        # Configuración de Scapy
+
         conf.verb = 0    
         self._configure_scapy_interface()
         _fix_scapy_routing()
 
     def _configure_scapy_interface(self):
-        """Configura la interfaz de red para Scapy"""
         try:
             if not self.iface:
                 self.iface = get_working_if()            
@@ -52,7 +50,7 @@ class AsyncScanner(QThread):
             self.result_line.emit(f"[!] Interface error: {str(e)}")
         
     def _parse_ports(self, port_str):
-        """Convierte una cadena de puertos en una lista de enteros"""
+        """ Converts a string of ports to a list of integers """
         ports = set()
         for part in port_str.split(','):
             if '-' in part:
@@ -63,7 +61,7 @@ class AsyncScanner(QThread):
         return sorted(ports)
 
     def _generate_ips(self):
-        """Genera todas las direcciones IP del rango dado"""
+        """ Generates all IP addresses in the given range """
         try:
             network = ipaddress.ip_network(self.ip_range, strict=False)
             return [str(ip) for ip in network.hosts()]
@@ -72,7 +70,9 @@ class AsyncScanner(QThread):
             return []
 
     async def _discover_hosts(self):
-        """Descubre hosts activos usando ARP (para redes locales) e ICMP (para cualquier red)"""
+        """ 
+        Discover active hosts using ARP (for local networks) and ICMP (for any network) 
+        """
         active_hosts = set()
         ip_list = self._generate_ips()
         self.total_hosts = len(ip_list)
@@ -81,13 +81,12 @@ class AsyncScanner(QThread):
             self.result_line.emit(f"[!] Invalid IP range: {self.ip_range}")
             return []
 
-        # Escaneo ARP (redes locales: usando iface)
+        # ARP scan (local networks: using iface)
         try:
             arp = ARP(pdst=self.ip_range)
             ether = Ether(dst="ff:ff:ff:ff:ff:ff")
             packet = ether/arp
-            
-            # Ejecutar en hilo separado (srp es bloqueante)
+                        
             ans, _ = await asyncio.to_thread(srp, packet, timeout=2, verbose=0, iface=self.iface)
             for _, rcv in ans:
                 active_hosts.add(rcv.psrc)
@@ -95,13 +94,13 @@ class AsyncScanner(QThread):
         except Exception as e:
             logger.error(f"Error on ARP scan: {e}")
 
-        # Escaneo ICMP para hosts que no respondieron a ARP
+        # ICMP scan for hosts that did not respond to ARP
         icmp_tasks = []
         for ip in ip_list:
             if ip not in active_hosts:
                 icmp_tasks.append(self._icmp_ping(ip))
         
-        # Procesar resultados ICMP en paralelo
+        # Process ICMP results in parallel
         icmp_results = await asyncio.gather(*icmp_tasks)
         for ip, is_active in icmp_results:
             if is_active:
@@ -111,10 +110,9 @@ class AsyncScanner(QThread):
         return list(active_hosts)
 
     async def _icmp_ping(self, ip):
-        """Realiza un ping ICMP a una dirección IP específica"""
+        """ Performs an ICMP ping to a specific IP address """
         try:
-            packet = IP(dst=ip)/ICMP()
-            # Ejecutar en hilo separado (sr1 es bloqueante)
+            packet = IP(dst=ip)/ICMP()            
             response = await asyncio.to_thread(sr1, packet, timeout=1, verbose=0)
             return (ip, response is not None)
         except OSError as e:
@@ -126,31 +124,30 @@ class AsyncScanner(QThread):
             return(ip, False)
 
     async def _scan_ports(self, host):
-        """Escanea puertos TCP en un host específico de forma asíncrona"""
+        """ Scans TCP ports on a specific host asynchronously """
         if self._cancel_requested:
             return []
 
         open_ports = []
         self.result_line.emit(f"[*] Scanning {host}...")
         
-        # Semáforo para controlar la concurrencia (máximo 100 puertos simultáneos)
+        # Semaphore to control concurrency (maximum 100 simultaneous ports)
         sem = asyncio.Semaphore(100)
         
         async def check_port(port):
-            """Verifica si un puerto específico está abierto"""
+            "Check if a specific port is open"
             async with sem:
                 if self._cancel_requested:
                     return None
                     
                 try:
-                    packet = IP(dst=host)/TCP(dport=port, flags="S")
-                    #Hilo separado
+                    packet = IP(dst=host)/TCP(dport=port, flags="S")                    
                     response = await asyncio.to_thread(sr1, packet, timeout=1, verbose=0)
                     
                     if response and response.haslayer(TCP):
                         flags = response.getlayer(TCP).flags
                         if flags == 0x12:  # SYN-ACK
-                            # Enviar RST para cerrar la conexión
+                            # Send RST to close the connection
                             try:
                                 rst_pkt = IP(dst=host)/TCP(dport=port, flags="R")
                                 await asyncio.to_thread(send, rst_pkt, verbose=0)
@@ -168,7 +165,7 @@ class AsyncScanner(QThread):
                     pass
                 return None
         
-        # Crear y ejecutar tareas para todos los puertos
+        # Create and run tasks for all ports
         tasks = [check_port(port) for port in self.ports]
         for future in asyncio.as_completed(tasks):
             port_result = await future
@@ -177,16 +174,20 @@ class AsyncScanner(QThread):
                 self.result_line.emit(f"{host}:{port_result} [OPEN]")
         
         return open_ports
+    
+    #-------------#
+    # MAIN METHOD #
+    #-------------#
 
     def run(self):
-        """Método principal que ejecuta el escaneo en un hilo separado"""
+        """ Main method that runs the scan in a separate thread """
         self._cancel_requested = False
         self.completed_hosts = 0
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         
         try:
-            # Fase 1: Descubrimiento de hosts
+            # Phase 1: Host Discovery
             self.result_line.emit("[*] Starting host discovery...")
             hosts = loop.run_until_complete(self._discover_hosts())
             
@@ -198,7 +199,7 @@ class AsyncScanner(QThread):
             self.result_line.emit(f"[+] Active hosts discovered: {len(hosts)}")
             self.total_hosts = len(hosts)
             
-            # Fase 2: Escaneo de puertos por host
+            # Phase 2: Port Scanning by Host
             self.result_line.emit("[*] Starting port scan...")
             host_tasks = [self._process_host(host) for host in hosts]
             loop.run_until_complete(asyncio.gather(*host_tasks))
@@ -213,7 +214,7 @@ class AsyncScanner(QThread):
             self.finished.emit()
 
     async def _process_host(self, host):
-        """Procesa un host individual (descubrimiento + escaneo de puertos)"""
+        """ Processes an individual host (discovery + port scanning) """
         if self._cancel_requested:
             return
             
@@ -225,6 +226,6 @@ class AsyncScanner(QThread):
         self.progress_update.emit(self.completed_hosts, self.total_hosts)
 
     def cancel(self):
-        """Solicita la cancelación del escaneo"""
+        """ Request cancellation of the scan """
         self._cancel_requested = True
         self.result_line.emit("[!] Aborting Scan...")

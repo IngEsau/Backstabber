@@ -17,9 +17,9 @@ def get_default_gateway():
 
 def evaluate_best_target(nmap_output: str, hosts: list[str], own_ip: str, gateway_ip: str) -> str | None:
     """
-    Devuelve la IP con mayor número de puertos abiertos, 
-    descartando own_ip y gateway_ip. Retorna None si no hay
-    ningún host válido con al menos 1 puerto abierto.
+    Returns the IP address with the highest number of open ports,
+    disregarding own_ip and gateway_ip. Returns None if there is
+    no valid host with at least one open port.
     """
     def score_host(ip: str) -> int:
         if ip == own_ip or ip == gateway_ip:

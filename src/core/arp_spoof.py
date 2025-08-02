@@ -53,22 +53,21 @@ class ARPSpoofThread(QThread):
 
 def check_arp_spoof_success(victim_ip: str, gateway_ip: str) -> bool:
     """
-    Verifica en la caché ARP de la VÍCTIMA si la IP del gateway
-    está asociada a la MAC del atacante.
+    Check the VICTIM's ARP cache to see if the gateway's IP address is associated with the attacker's MAC address.
     """
     iface        = conf.iface
     attacker_mac = get_if_hwaddr(iface).lower()
 
-    # 1) Necesitamos la MAC de la víctima para dirigirle el ARP request
+   # 1. The victim's MAC address is needed to route the ARP request.
     victim_mac = getmacbyip(victim_ip)
     if not victim_mac:
         return False
 
-    # 2) Hacemos que la víctima pregunte: "¿Quién tiene gateway_ip?"
+    # 2. Have the victim ask: "Who has gateway_ip?"
     arp_req = Ether(dst=victim_mac) / ARP(op=1, pdst=gateway_ip)
     ans, _  = srp(arp_req, iface=iface, timeout=3, retry=2, verbose=False)
 
-    # 3) Si responde, comprobamos si usa nuestra MAC
+    #3) If it responds, we check if it uses our MAC
     for _, resp in ans:
         if resp.hwsrc.lower() == attacker_mac:
             return True
