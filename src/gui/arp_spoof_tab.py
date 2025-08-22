@@ -1,11 +1,13 @@
 # src/gui/arp_spoof_tab.py
 import os
 import datetime
+import json
+import csv
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QLineEdit,
     QPushButton, QTextEdit, QMessageBox,
-    QHBoxLayout, QComboBox
+    QHBoxLayout, QComboBox, QFileDialog
 )
 from PyQt5.QtCore import QTimer
 from PyQt5.QtGui import QColor, QPalette
@@ -20,6 +22,7 @@ class ARPSpoofTab(QWidget):
         super().__init__()
         self.scanner_tab    = scanner_tab
         self.thread         = None
+        self.logs           = []  # Store logs in memory
         self.check_attempts = 0
         self.max_attempts   = 3
         self.best_target_ip = None
@@ -65,9 +68,19 @@ class ARPSpoofTab(QWidget):
         self.log_area.setReadOnly(True)
         layout.addWidget(self.log_area)
 
-        # Conection buttons
+        # Export buttons
+        export_layout = QHBoxLayout()
+        self.export_csv_btn = QPushButton("Export Logs (CSV)")
+        self.export_json_btn = QPushButton("Export Logs (JSON)")
+        export_layout.addWidget(self.export_csv_btn)
+        export_layout.addWidget(self.export_json_btn)
+        layout.addLayout(export_layout)
+
+        # Connect buttons to functions
         self.start_button.clicked.connect(self.start_spoof)
         self.stop_button.clicked.connect(self.stop_spoof)
+        self.export_csv_btn.clicked.connect(self.export_logs_csv)
+        self.export_json_btn.clicked.connect(self.export_logs_json)
 
         self.setLayout(layout)
 
@@ -133,9 +146,12 @@ class ARPSpoofTab(QWidget):
 
     def log_message(self, message: str):
         timestamp = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
-        full_msg = f"{timestamp}\n{message}"
+        full_msg = f"{timestamp} {message}"
+        self.logs.append({"timestamp": timestamp, "message": message})
         self.log_area.append(full_msg)
-        with open("logs/arp_spoof_log.txt", "a") as f:
+        # Also write to file as before
+        os.makedirs("logs", exist_ok=True)
+        with open("logs/arp_spoof_gui_log.txt", "a") as f:
             f.write(full_msg + "\n")
 
     def verify_spoof_success(self, victim_ip, gateway_ip):
@@ -161,3 +177,32 @@ class ARPSpoofTab(QWidget):
 
     def on_thread_finished(self):
         self.log_message("[✔] ARP table restored.")
+
+    def export_logs_csv(self):
+        options = QFileDialog.Options()
+        file_name, _ = QFileDialog.getSaveFileName(self, "Save CSV File", "", "CSV Files (*.csv);;All Files (*)", options=options)
+        if file_name:
+            try:
+                with open(file_name, "w", newline="") as csvfile:
+                    fieldnames = self.logs[0].keys() if self.logs else []
+                    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+                    writer.writeheader()
+                    for log in self.logs:
+                        writer.writerow(log)
+
+                QMessageBox.information(self, "Success", "Logs exported successfully.")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to export logs: {e}")
+
+    def export_logs_json(self):
+        options = QFileDialog.Options()
+        file_name, _ = QFileDialog.getSaveFileName(self, "Save JSON File", "", "JSON Files (*.json);;All Files (*)", options=options)
+        if file_name:
+            try:
+                with open(file_name, "w") as jsonfile:
+                    json.dump(self.logs, jsonfile, indent=4)
+
+                QMessageBox.information(self, "Success", "Logs exported successfully.")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to export logs: {e}")
