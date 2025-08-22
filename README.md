@@ -1,5 +1,5 @@
 
-![Backstabber logo](assets/logoBT.png)
+<img src="assets/logoBT.png" alt="BTTK Logo" width="200">
 
 # Backstabber Toolkit
 
@@ -64,4 +64,5 @@ This project is licensed under the MIT License. See the [LICENSE](./LICENSE) fil
 ---
 
 **Developed by Esaú Aguilar — Backstabber Toolkit © 2025**
+
 
