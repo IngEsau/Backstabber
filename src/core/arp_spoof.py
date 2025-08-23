@@ -8,7 +8,7 @@ from scapy.all import (
     get_if_hwaddr, conf, srp, sniff
 )
 
-LOG_PATH = os.path.join(os.path.dirname(__file__), "../../logs/arp_spoof_core_log.txt")
+LOG_PATH = os.path.join(os.path.dirname(__file__), "../logs/arp_spoof_core_log.txt")
 
 def log_core(message: str):
     timestamp = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
