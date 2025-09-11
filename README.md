@@ -94,7 +94,7 @@ Launch the application:
    python src/main.py
    ```
 
-# Main tabs:
+## Main tabs:
 
 Network Scanner — enter IP range and ports then Start Scan.
 
@@ -122,3 +122,4 @@ This project is licensed under the MIT License. See the [LICENSE](./LICENSE) fil
 ---
 
 **Developed by Esaú Aguilar — Backstabber Toolkit © 2025**
+
