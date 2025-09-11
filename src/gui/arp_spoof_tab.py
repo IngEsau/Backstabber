@@ -13,7 +13,9 @@ from PyQt5.QtCore import QTimer
 from PyQt5.QtGui import QColor, QPalette
 from scapy.all import conf, get_if_hwaddr
 
-from core.arp_spoof import ARPSpoofThread, check_arp_spoof_success
+# Centralized ARP manager instead of creating threads locally
+from core.arp_manager import arp_manager
+
 from utils.net import in_same_subnet, get_default_gateway, evaluate_best_target
 
 
@@ -21,13 +23,22 @@ class ARPSpoofTab(QWidget):
     def __init__(self, scanner_tab):
         super().__init__()
         self.scanner_tab    = scanner_tab
-        self.thread         = None
         self.logs           = []  # Store logs in memory
         self.check_attempts = 0
         self.max_attempts   = 3
         self.best_target_ip = None
         os.makedirs("logs", exist_ok=True)
         self._build_ui()
+
+        # subscribe to manager signals
+        try:
+            arp_manager.log_event.connect(self._on_arp_log_event)
+            arp_manager.spoof_started.connect(self._on_spoof_started_signal)
+            arp_manager.spoof_verified.connect(self._on_spoof_verified_signal)
+            arp_manager.spoof_failed.connect(self._on_spoof_failed_signal)
+            arp_manager.spoof_stopped.connect(self._on_spoof_stopped_signal)
+        except Exception:
+            pass
 
     def _build_ui(self):
         layout = QVBoxLayout()
@@ -135,14 +146,16 @@ class ARPSpoofTab(QWidget):
             self.log_area.append("[✖] Target and gateway are not in the same subnet.")
             return
 
-        self.thread = ARPSpoofThread(target_ip, gateway)
-        self.thread.finished.connect(self.on_thread_finished)
-        self.thread.start()
-        self.start_button.setEnabled(False)
-        self.stop_button.setEnabled(True)
-        self.log_message(f"[✔] ARP spoofing started against {target_ip}.")
-        self.check_attempts = 0
-        QTimer.singleShot(4000, lambda: self.verify_spoof_success(target_ip, gateway))
+        # use arp_manager to start spoof (non-blocking)
+        started = arp_manager.start_spoof(target_ip, gateway)
+        if started:
+            self.start_button.setEnabled(False)
+            self.stop_button.setEnabled(True)
+            self.log_message(f"[✔] ARP spoofing started against {target_ip}.")
+            # manager will emit verification/logs asynchronously
+        else:
+            self.log_message("[✖] Failed to start spoof (another spoof may be running).")
+            QMessageBox.warning(self, "Start failed", "Could not start ARP spoof (another spoof may be active).")
 
     def log_message(self, message: str):
         timestamp = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
@@ -154,29 +167,36 @@ class ARPSpoofTab(QWidget):
         with open("logs/arp_spoof_gui_log.txt", "a") as f:
             f.write(full_msg + "\n")
 
-    def verify_spoof_success(self, victim_ip, gateway_ip):
-        if check_arp_spoof_success(victim_ip, gateway_ip):
-            self.log_message("[✔] ARP Spoofing is working properly.")
-        else:
-            self.check_attempts += 1
-            if self.check_attempts < self.max_attempts:
-                self.log_message("[…] Verification failed, retrying...")
-                QTimer.singleShot(3000, lambda: self.verify_spoof_success(victim_ip, gateway_ip))
-            else:
-                self.log_message("[✖] Spoofing not detected after multiple attempts.")
-                self.log_message("WARNING: This network may not be suitable for ARP poisoning.")
-
     def stop_spoof(self):
-        if self.thread:
-            self.thread.stop()
-            self.thread.wait()
-            self.thread = None  # Clear thread reference
+        # ask manager to stop and wait for restoration
+        target_ip = self.target_ip_input.text().strip()
+        gateway   = self.gateway_combo.currentText().strip()
+        ok = arp_manager.stop_spoof(wait_for_restore=True, timeout_ms=5000)
+        if ok:
+            self.log_message("[✘] ARP spoofing stopped (restore likely successful).")
+        else:
+            self.log_message("[✘] ARP spoofing stopped (restore may have failed).")
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
-        self.log_message("[✘] ARP spoofing stopped.")
 
-    def on_thread_finished(self):
-        self.log_message("[✔] ARP table restored.")
+    # signal handlers from arp_manager
+    def _on_arp_log_event(self, message: str):
+        self.log_message(message)
+
+    def _on_spoof_started_signal(self, target: str, gateway: str):
+        self.log_message(f"[i] Manager: spoof started for {target} <-> {gateway}")
+
+    def _on_spoof_verified_signal(self, target: str, gateway: str, msg: str):
+        self.log_message(f"[✔] Manager: spoof verified for {target} <-> {gateway}: {msg}")
+
+    def _on_spoof_failed_signal(self, target: str, gateway: str, reason: str):
+        self.log_message(f"[✖] Manager: spoof verification failed: {reason}")
+
+    def _on_spoof_stopped_signal(self, target: str, gateway: str, restored: bool):
+        if restored:
+            self.log_message("[✔] ARP table restored (manager confirmed).")
+        else:
+            self.log_message("[!] ARP table restoration may have failed (manager).")
 
     def export_logs_csv(self):
         options = QFileDialog.Options()
