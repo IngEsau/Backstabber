@@ -91,7 +91,7 @@ pip install -r requirements.txt
 Launch the application:
 
    ```bash
-   python src/main.py
+   python3 backstabber.py
    ```
 
 ## Main tabs:
@@ -122,4 +122,5 @@ This project is licensed under the MIT License. See the [LICENSE](./LICENSE) fil
 ---
 
 **Developed by Esaú Aguilar — Backstabber Toolkit © 2025**
+
 
