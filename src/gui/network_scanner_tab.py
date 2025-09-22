@@ -23,8 +23,7 @@ class NetworkScannerTab(QWidget):
         os.makedirs("logs", exist_ok=True)
 
     def _build_ui(self):
-        layout = QVBoxLayout()
-
+        layout = QVBoxLayout()        
         # Input field to IP range
         layout.addWidget(QLabel("Enter the IP range (e.g 192.168.1.0/24):"))
         self.input = QLineEdit()
@@ -46,7 +45,9 @@ class NetworkScannerTab(QWidget):
         # Control buttons
         btn_layout = QHBoxLayout()
         self.scan_button = QPushButton("Start Scan")
+        self.scan_button.setObjectName("startButton")
         self.cancel_button = QPushButton("Abort Scan")
+        self.cancel_button.setObjectName("stopButton")
         self.cancel_button.setEnabled(False)
         btn_layout.addWidget(self.scan_button)
         btn_layout.addWidget(self.cancel_button)
