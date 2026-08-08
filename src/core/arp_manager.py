@@ -101,6 +101,7 @@ class ARPManager(QObject):
         self._thread: Optional[ARPSpoofThread] = None
         self._verify_thread: Optional[_VerifyThread] = None
         self._state: Dict[str, Any] = {
+            "state": "CREATED",
             "running": False,
             "target": None,
             "gateway": None,
@@ -160,13 +161,14 @@ class ARPManager(QObject):
                     except Exception:
                         pass
 
-                self._thread = ARPSpoofThread(target_ip, gateway_ip, interval=interval)
+                worker = ARPSpoofThread(target_ip, gateway_ip, interval=interval)
                 # connect finish signal for logging and to update state
-                self._thread.finished.connect(lambda: self._on_thread_finished(target_ip, gateway_ip))
-                self._thread.start()
+                worker.finished.connect(lambda worker=worker: self._on_thread_finished(worker, target_ip, gateway_ip))
+                self._thread = worker
 
                 # update state
                 self._state.update({
+                    "state": "RUNNING",
                     "running": True,
                     "target": target_ip,
                     "gateway": gateway_ip,
@@ -174,6 +176,8 @@ class ARPManager(QObject):
                     "verified": False,
                     "started_at": time.time()
                 })
+
+                worker.start()
                 self._emit_log(f"[ARPManager] Spoof started for {target_ip} <-> {gateway_ip}")
                 self.spoof_started.emit(target_ip, gateway_ip)
 
@@ -190,7 +194,8 @@ class ARPManager(QObject):
                 return True
             except Exception as e:
                 self._emit_log(f"[ARPManager] Failed to start spoof thread: {e}")
-                self._state.update({"running": False, "target": None, "gateway": None, "iface": None, "verified": False})
+                self._thread = None
+                self._state.update({"state": "FAILED", "running": False, "target": None, "gateway": None, "iface": None, "verified": False, "started_at": None})
                 return False
 
     def _on_verify_result(self, ok: bool, message: str, target: str, gateway: str) -> None:
@@ -201,6 +206,10 @@ class ARPManager(QObject):
             if not self._state["running"]:
                 # spoof stopped while verification was ongoing
                 self._emit_log("[ARPManager] Verification result arrived but spoof not running")
+                return
+
+            if self._state.get("state") == "STOPPING":
+                self._emit_log("[ARPManager] Verification result arrived while spoof is stopping")
                 return
 
             if self._state["target"] != target or self._state["gateway"] != gateway:
@@ -220,33 +229,50 @@ class ARPManager(QObject):
             # clear verify thread reference
             self._verify_thread = None
 
-    def _on_thread_finished(self, target: str, gateway: str) -> None:
+    def _on_thread_finished(self, worker: object, target: str, gateway: str) -> None:
         """
         ARPSpoofThread finished: update state and emit spoof_stopped.
         Note: the ARPSpoofThread implementation is expected to attempt restoration
         as part of its shutdown; here we perform a best-effort verification to see
         if the restoration succeeded.
         """
+        with self._lock:
+            if self._thread is not worker:
+                return
+            verify_thread = self._verify_thread
+            self._verify_thread = None
+
+        if verify_thread is not None:
+            try:
+                verify_thread.stop()
+            except Exception:
+                pass
+
         restored = True
         try:
             # after thread finished, check whether victim no longer maps gateway to attacker
             if check_arp_spoof_success is not None:
                 # check_arp_spoof_success returns True if victim associates gateway with attacker -> BAD
-                still_poisoned = check_arp_spoof_success(self._state["target"], self._state["gateway"])
+                still_poisoned = check_arp_spoof_success(target, gateway)
                 restored = not bool(still_poisoned)
         except Exception:
             # if verification fails, be conservative and mark not restored
             restored = False
 
+        should_emit = False
         with self._lock:
+            if self._thread is not worker:
+                return
             self._emit_log(f"[ARPManager] Spoof thread finished for {target} <-> {gateway}, restored={restored}")
             # reset state
-            self._state.update({"running": False, "target": None, "gateway": None, "iface": None, "verified": False, "started_at": None})
+            self._state.update({"state": "SUCCEEDED" if restored else "CLEANUP_FAILED", "running": False, "target": None, "gateway": None, "iface": None, "verified": False, "started_at": None})
             self._thread = None
-        try:
-            self.spoof_stopped.emit(target, gateway, restored)
-        except Exception:
-            pass
+            should_emit = True
+        if should_emit:
+            try:
+                self.spoof_stopped.emit(target, gateway, restored)
+            except Exception:
+                pass
 
     def stop_spoof(self, wait_for_restore: bool = True, timeout_ms: int = 5000) -> bool:
         """
@@ -254,7 +280,7 @@ class ARPManager(QObject):
 
         If wait_for_restore is True, wait up to timeout_ms milliseconds for the worker
         to finish and attempt restoration. Returns True if restore appears successful (best-effort),
-        False otherwise (including case where no spoof was running).
+        False if restoration cannot be confirmed. If no spoof is running, returns True.
         """
         with self._lock:
             if not self._state["running"] or self._thread is None:
@@ -264,6 +290,14 @@ class ARPManager(QObject):
             target = self._state["target"]
             gateway = self._state["gateway"]
             thr = self._thread
+            self._state["state"] = "STOPPING"
+
+            if self._verify_thread is not None:
+                try:
+                    self._verify_thread.stop()
+                except Exception:
+                    pass
+                self._verify_thread = None
 
             # request stop
             try:
@@ -273,37 +307,47 @@ class ARPManager(QObject):
 
         # optionally wait for thread to finish
         restored = False
+        waited = False
         if wait_for_restore:
             try:
-                # convert ms to seconds for wait
                 waited = thr.wait(timeout_ms)
-                # After thread finished, perform verification: ensure victim no longer maps gateway to attacker
-                if check_arp_spoof_success is not None:
-                    try:
-                        still_poisoned = check_arp_spoof_success(target, gateway)
-                        restored = not bool(still_poisoned)
-                    except Exception:
-                        restored = False
+                if waited:
+                    # After thread finished, perform verification: ensure victim no longer maps gateway to attacker
+                    if check_arp_spoof_success is not None:
+                        try:
+                            still_poisoned = check_arp_spoof_success(target, gateway)
+                            restored = not bool(still_poisoned)
+                        except Exception:
+                            restored = False
+                    else:
+                        restored = True
                 else:
-                    # verification not available; assume best-effort restore attempted
-                    restored = True
-            except Exception:
+                    self._emit_log("[ARPManager] Stop timed out; thread still running")
+            except Exception as e:
+                self._emit_log(f"[ARPManager] Error waiting for spoof thread to stop: {e}")
                 restored = False
+                waited = False
         else:
             # do not wait; we cannot guarantee restoration
-            restored = False
+            self._emit_log("[ARPManager] stop_spoof requested without waiting; thread may still be active")
 
-        # clear internal state under lock
-        with self._lock:
-            self._thread = None
-            self._state.update({"running": False, "target": None, "gateway": None, "iface": None, "verified": False, "started_at": None})
+        if waited:
+            should_emit = False
+            with self._lock:
+                if self._thread is thr:
+                    self._thread = None
+                    self._state.update({"state": "SUCCEEDED" if restored else "CLEANUP_FAILED", "running": False, "target": None, "gateway": None, "iface": None, "verified": False, "started_at": None})
+                    should_emit = True
+            if should_emit:
+                try:
+                    self.spoof_stopped.emit(target, gateway, restored)
+                except Exception:
+                    pass
+        else:
+            # do not emit spoof_stopped until thread actually finishes
+            self._emit_log(f"[ARPManager] stop_spoof for {target} <-> {gateway} completed asynchronously, restored={restored}")
 
-        try:
-            self.spoof_stopped.emit(target, gateway, restored)
-        except Exception:
-            pass
-
-        self._emit_log(f"[ARPManager] stop_spoof requested for {target} <-> {gateway}, restored={restored}")
+        self._emit_log(f"[ARPManager] stop_spoof requested for {target} <-> {gateway}, restored={restored}, thread_finished={waited}")
         return restored
 
     def emergency_restore(self, target_ip: str, gateway_ip: str, iface: Optional[str] = None) -> bool:
@@ -336,6 +380,10 @@ class ARPManager(QObject):
         except Exception as e:
             self._emit_log(f"[ARPManager] emergency_restore exception: {e}")
             return False
+
+    def is_active(self) -> bool:
+        with self._lock:
+            return bool(self._state["running"])
 
     def status(self) -> Dict[str, Any]:
         """

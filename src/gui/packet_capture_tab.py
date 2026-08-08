@@ -259,7 +259,11 @@ class PacketCaptureTab(QWidget):
         victim = self.victim_ip_input.text().strip() or None
         gateway = self.gateway_ip_input.text().strip() or None
         attacker = None  # attacker IP not collected here; could be optional
-        bpf, display = map_filter(preset, victim_ip=victim, attacker_ip=attacker, gateway_ip=gateway)
+        try:
+            bpf, display = map_filter(preset, victim_ip=victim, attacker_ip=attacker, gateway_ip=gateway)
+        except ValueError as exc:
+            QMessageBox.warning(self, "Filter error", str(exc))
+            return
 
         # handle custom BPF
         if preset == "Custom BPF":
@@ -336,7 +340,11 @@ class PacketCaptureTab(QWidget):
             victim = self.victim_ip_input.text().strip() or None
             gateway = self.gateway_ip_input.text().strip() or None
             attacker = None
-            bpf, display = map_filter(preset, victim_ip=victim, attacker_ip=attacker, gateway_ip=gateway)
+            try:
+                bpf, display = map_filter(preset, victim_ip=victim, attacker_ip=attacker, gateway_ip=gateway)
+            except ValueError as exc:
+                self._log(f"[!] {exc}")
+                return
             max_packets = self.max_packets_spin.value() or None
             self._start_capture_backend(iface, bpf, display, max_packets)
 
@@ -351,7 +359,11 @@ class PacketCaptureTab(QWidget):
             victim = self.victim_ip_input.text().strip() or None
             gateway = self.gateway_ip_input.text().strip() or None
             attacker = None
-            bpf, display = map_filter(preset, victim_ip=victim, attacker_ip=attacker, gateway_ip=gateway)
+            try:
+                bpf, display = map_filter(preset, victim_ip=victim, attacker_ip=attacker, gateway_ip=gateway)
+            except ValueError as exc:
+                self._log(f"[!] {exc}")
+                return
             max_packets = self.max_packets_spin.value() or None
             self._start_capture_backend(iface, bpf, display, max_packets)
         else:
@@ -418,7 +430,11 @@ class PacketCaptureTab(QWidget):
         victim = self.victim_ip_input.text().strip() or None
         gateway = self.gateway_ip_input.text().strip() or None
         attacker = None
-        bpf, display = map_filter(preset, victim_ip=victim, attacker_ip=attacker, gateway_ip=gateway)
+        try:
+            bpf, display = map_filter(preset, victim_ip=victim, attacker_ip=attacker, gateway_ip=gateway)
+        except ValueError as exc:
+            QMessageBox.warning(self, "Filter error", str(exc))
+            return
         if preset == "Custom BPF":
             custom = self.custom_bpf.text().strip()
             if not custom:

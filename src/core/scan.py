@@ -1,15 +1,15 @@
 from PyQt5.QtCore import QThread, pyqtSignal
 from scapy.all import ARP, Ether, srp, ICMP, IP, sr1, TCP, conf, send, get_if_addr, get_working_if
 from core.scanner_adapter import get_default_scanner
+from core.scope_policy import ScopePolicy, ScopePolicyError
+from core.kill_switch import get_kill_switch
 from concurrent.futures import ThreadPoolExecutor
 
-#---------------#
 import asyncio
 import ipaddress
 import logging
 import netifaces
 import json
-#---------------#
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -77,7 +77,6 @@ class AsyncScanner(QThread):
     result_line = pyqtSignal(str)
     host_discovered = pyqtSignal(str, list)
     progress_update = pyqtSignal(int, int)
-    finished = pyqtSignal()
 
     def __init__(self, ip_range, ports="1-1024", iface=None, parent=None):
         super().__init__(parent)
@@ -85,10 +84,13 @@ class AsyncScanner(QThread):
         self.ports = self._parse_ports(ports)
         self.iface = iface
         self._cancel_requested = False
+        self._kill_switch = get_kill_switch()
         self.total_hosts = 0
         self.completed_hosts = 0
-        # mapping host_ip -> list_of_open_ports discovered during scanning
+        self.status = "CREATED"
+        self.error_message = None
         self.discovered_hosts_with_ports = {}
+        self._scope_policy = ScopePolicy()
 
         conf.verb = 0
         self._configure_scapy_interface()
@@ -107,7 +109,7 @@ class AsyncScanner(QThread):
             self.result_line.emit(f"[!] Interface error: {str(e)}")
 
     def _parse_ports(self, port_str):
-        """ Converts a string of ports to a list of integers """
+        """Converts a string of ports to a list of integers."""
         ports = set()
         for part in port_str.split(','):
             if '-' in part:
@@ -118,13 +120,14 @@ class AsyncScanner(QThread):
         return sorted(ports)
 
     def _generate_ips(self):
-        """ Generates all IP addresses in the given range """
+        """Generate IP addresses in the configured range."""
         try:
-            network = ipaddress.ip_network(self.ip_range, strict=False)
-            return [str(ip) for ip in network.hosts()]
-        except ValueError as e:
-            logger.error(f"Error on IP range: {e}")
+            network = self._scope_policy.validate_network(self.ip_range)
+        except ScopePolicyError as exc:
+            self.error_message = str(exc)
+            logger.error(self.error_message)
             return []
+        return [str(ip) for ip in network.hosts()]
 
     async def _discover_hosts(self):
         """
@@ -145,6 +148,10 @@ class AsyncScanner(QThread):
 
         self.result_line.emit(f"[*] IP list size to scan: {len(ip_list)}")
 
+        if self._kill_switch.is_triggered() or self._cancel_requested:
+            self.result_line.emit("[!] Scan aborted before discovery")
+            return []
+
         # ARP scan (local networks: using iface)
         try:
             arp = ARP(pdst=self.ip_range)
@@ -153,23 +160,29 @@ class AsyncScanner(QThread):
 
             ans, _ = await asyncio.to_thread(srp, packet, timeout=2, verbose=0, iface=self.iface)
             for _, rcv in ans:
+                if self._kill_switch.is_triggered() or self._cancel_requested:
+                    break
                 active_hosts.add(rcv.psrc)
-                self.result_line.emit(f"[ARP] Acive HOST: {rcv.psrc}")
+                self.result_line.emit(f"[ARP] Active HOST: {rcv.psrc}")
         except Exception as e:
             logger.error(f"Error on ARP scan: {e}")
 
         # ICMP scan for hosts that did not respond to ARP
         icmp_tasks = []
         for ip in ip_list:
+            if self._kill_switch.is_triggered() or self._cancel_requested:
+                break
             if ip not in active_hosts:
                 icmp_tasks.append(self._icmp_ping(ip))
 
-        # Process ICMP results in parallel
-        icmp_results = await asyncio.gather(*icmp_tasks)
-        for ip, is_active in icmp_results:
-            if is_active:
-                active_hosts.add(ip)
-                self.result_line.emit(f"[ICMP] Active HOST: {ip}")
+        if icmp_tasks:
+            icmp_results = await asyncio.gather(*icmp_tasks)
+            for ip, is_active in icmp_results:
+                if self._kill_switch.is_triggered() or self._cancel_requested:
+                    break
+                if is_active:
+                    active_hosts.add(ip)
+                    self.result_line.emit(f"[ICMP] Active HOST: {ip}")
 
         return list(active_hosts)
 
@@ -189,7 +202,7 @@ class AsyncScanner(QThread):
 
     async def _scan_ports(self, host):
         """ Scans TCP ports on a specific host asynchronously """
-        if self._cancel_requested:
+        if self._cancel_requested or self._kill_switch.is_triggered():
             return []
 
         open_ports = []
@@ -252,14 +265,21 @@ class AsyncScanner(QThread):
 
         try:
             # Phase 1: Host Discovery
+            self.status = "VALIDATED"
             self.result_line.emit("[*] Starting host discovery...")
             hosts = loop.run_until_complete(self._discover_hosts())
 
-            if not hosts:
-                self.result_line.emit("[!] No active hosts")
-                self.finished.emit()
+            if self.error_message:
+                self.status = "FAILED"
+                self.result_line.emit(f"[!] Scan failed: {self.error_message}")
                 return
 
+            if not hosts:
+                self.status = "SUCCEEDED"
+                self.result_line.emit("[!] No active hosts")
+                return
+
+            hosts = self._scope_policy.filter_targets(hosts)
             self.result_line.emit(f"[+] Active hosts discovered: {len(hosts)}")
             self.total_hosts = len(hosts)
 
@@ -331,6 +351,7 @@ class AsyncScanner(QThread):
                 host_tasks = [self._process_host(host) for host in hosts]
                 loop.run_until_complete(asyncio.gather(*host_tasks))
 
+            self.status = "SUCCEEDED"
             self.result_line.emit("[+] Scan finished")
 
             # --------------------------
@@ -380,15 +401,15 @@ class AsyncScanner(QThread):
                 self.result_line.emit(f"[!] Error while generating summary: {e}")
 
         except Exception as e:
+            self.status = "FAILED"
             self.result_line.emit(f"[!] Fatal error: {str(e)}")
             logger.exception("Error during scan")
         finally:
             loop.close()
-            self.finished.emit()
 
     async def _process_host(self, host):
         """ Processes an individual host (discovery + port scanning) """
-        if self._cancel_requested:
+        if self._cancel_requested or self._kill_switch.is_triggered():
             return
 
         open_ports = await self._scan_ports(host)

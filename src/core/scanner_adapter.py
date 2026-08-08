@@ -86,6 +86,8 @@ class SubprocessNmapScanner(BaseScanner):
                     state_el = port_el.find("state")
                     service_el = port_el.find("service")
                     state = state_el.get("state") if state_el is not None else None
+                    if state is None or str(state).lower() != "open":
+                        continue
                     service = service_el.get("name") if service_el is not None else None
                     try:
                         pnum = int(portid)

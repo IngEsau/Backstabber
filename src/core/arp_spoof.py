@@ -2,7 +2,7 @@
 
 import os
 import datetime
-from PyQt5.QtCore import QThread, pyqtSignal
+from PyQt5.QtCore import QThread
 from scapy.all import (
     Ether, ARP, sendp, getmacbyip,
     get_if_hwaddr, conf, srp, sniff
@@ -19,8 +19,6 @@ def log_core(message: str):
         f.write(full_msg + "\n")
 
 class ARPSpoofThread(QThread):
-    finished = pyqtSignal()
-
     def __init__(self, target_ip, gateway_ip, interval=2, parent=None):
         super().__init__(parent)
         self.target_ip  = target_ip
@@ -95,7 +93,7 @@ class ARPSpoofThread(QThread):
             self.msleep(self.interval * 1000)
 
         self.restore_arp(iface, tmac, gmac)
-        self.finished.emit()
+        # QThread.finished is emitted by Qt once run() returns.
 
     def stop(self):
         self.running = False

@@ -207,8 +207,14 @@ class NetworkScannerTab(QWidget):
         self.progress_bar.setVisible(False)
 
     def on_scan_finished(self):
-        self.log_message("[+] Scan completed successfully")
         self.finalize_scan()
+        scanner = self.scanner_thread
+        if scanner is None or scanner.status != "SUCCEEDED":
+            error = getattr(scanner, "error_message", None) or "revisa los mensajes anteriores"
+            self.log_message(f"[!] Scan failed: {error}")
+            return
+
+        self.log_message("[+] Scan completed successfully")
         self.hosts = list(self.scan_results.keys())
         # Try to get gateway from scan results if available
         if self.hosts:

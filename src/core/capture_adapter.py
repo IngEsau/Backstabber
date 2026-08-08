@@ -120,22 +120,18 @@ def map_filter(
     if key == "Attacker <-> Victim":
         if a and v:
             return (f"host {a} and host {v}", None)
-        else:
-            # fallback to empty capture filter but UI should warn caller that IPs missing
-            return ("", None)
+        raise ValueError("Attacker and Victim IPs are required for Attacker <-> Victim filter")
 
     if key == "Attacker <-> Gateway":
         if a and g:
             return (f"host {a} and host {g}", None)
-        else:
-            return ("", None)
+        raise ValueError("Attacker and Gateway IPs are required for Attacker <-> Gateway filter")
 
     if key == "MITM (Victim + Gateway)":
         if v and g:
             # capture traffic involving victim or gateway (useful for MITM analysis)
             return (f"host {v} or host {g}", None)
-        else:
-            return ("", None)
+        raise ValueError("Victim and Gateway IPs are required for MITM filter")
 
     if key == "Custom BPF":
         # For convenience, caller may pass custom BPF in 'attacker_ip' parameter
