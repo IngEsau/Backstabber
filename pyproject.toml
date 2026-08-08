@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "backstabber-toolkit"
+version = "1.1.0"
+description = "Authorized red-team control plane and network testing toolkit"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{ name = "Esau Aguilar" }]
+dependencies = [
+  "markdown-it-py>=3.0.0,<4.0.0",
+  "mdurl>=0.1.2,<1.0.0",
+  "netifaces>=0.11.0,<1.0.0",
+  "Pygments>=2.19.1,<3.0.0",
+  "PyQt5>=5.15.9,<6.0.0",
+  "python3-nmap>=1.9.1,<2.0.0",
+  "rich>=14.0.0,<15.0.0",
+  "scapy>=2.4.5,<3.0.0",
+  "pyshark>=0.4.4,<1.0.0",
+  "PyYAML>=6.0,<7.0",
+]
+
+[project.scripts]
+backstabber = "main:main"
+backstabberctl = "backstabber_cli:main"
+backstabber-api = "api.server:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+py-modules = ["main", "backstabber_cli"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.data-files]
+"share/backstabber-toolkit/frontend" = [
+  "frontend/index.html",
+  "frontend/styles.css",
+  "frontend/app.js",
+]
+"share/backstabber-toolkit/assets" = [
+  "assets/logoBT.png",
+]

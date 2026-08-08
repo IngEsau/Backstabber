@@ -10,3 +10,8 @@ venv/
 
 # Logs
 logs/
+
+# Runtime state
+data/
+output/
+temp/

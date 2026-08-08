@@ -2,8 +2,8 @@
 
 <img src="assets/logoBT.png" alt="BTTK Logo" width="200">
 
-**Backstabber Toolkit** is a professional, modular network pentesting toolkit written in Python with a PyQt5 graphical interface.  
-It is designed for maintainability and extensibility: core functionality (scanning, ARP spoofing, packet capture) is implemented as reusable modules and a central controller so you can safely evolve the project toward more complex workflows.
+**Backstabber Toolkit** is a professional, modular network pentesting toolkit written in Python. It includes the existing PyQt5 GUI plus a new lightweight control plane for local engagements, assets, approvals, job execution and auditability.
+It is designed for maintainability and extensibility: core workflows can now be driven from GUI, CLI, HTTP API or the minimal web dashboard.
 
 This repository is intended for authorized security testing, research, and learning in controlled environments only. Use it responsibly and legally.
 
@@ -15,10 +15,21 @@ This repository is intended for authorized security testing, research, and learn
 - Clear separation of concerns in the GUI: `Network Scanner`, `ARP Spoofing`, and `Packet Capture` tabs.
 - Modular architecture so you can plug new scanners, capture backends or UI features without large refactors.
 - Practical UX safeguards: verification of ARP spoofing, emergency restore helper, and safe stop/restore flows to reduce risk of leaving networks poisoned.
+- Durable local control plane: engagements, assets, jobs, approvals, executions and audit events are stored in SQLite.
+- Dry-run workflow: active operations can show the exact planned actions before a job is queued.
+- Lightweight web dashboard: static HTML/CSS/JS served by the local API, with no Node or frontend build step.
 
 ---
 
 ## Features
+
+- **Control Plane**
+  - Local SQLite persistence under `data/backstabber.db` by default.
+  - Engagement scope enforcement before jobs are accepted.
+  - Durable job queue with `queued`, `waiting_approval`, `running`, `succeeded`, `failed` and `rejected` states.
+  - Approval workflow before active operations leave dry-run mode.
+  - Audit log for engagement, asset, job, approval and execution events.
+  - CLI, HTTP API and dashboard entrypoints.
 
 - **Network Scanner**
   - Host discovery (ARP & ICMP).
@@ -88,11 +99,57 @@ pip install -r requirements.txt
 
 ## Usage
 
-Launch the application:
+Launch the legacy PyQt application:
 
    ```bash
    python3 backstabber.py
    ```
+
+Run the control plane CLI:
+
+   ```bash
+   PYTHONPATH=src python -m backstabber_cli overview
+   ```
+
+Create an engagement:
+
+   ```bash
+   PYTHONPATH=src python -m backstabber_cli engagement create \
+     --name "Lab assessment" \
+     --scope 192.168.1.0/24
+   ```
+
+Run a dry-run scan plan:
+
+   ```bash
+   PYTHONPATH=src python -m backstabber_cli job dry-run \
+     --engagement <engagement-id> \
+     --operation network.scan \
+     --target 192.168.1.0/24 \
+     --ports 22,80,443
+   ```
+
+Queue and approve a job:
+
+   ```bash
+   PYTHONPATH=src python -m backstabber_cli job enqueue \
+     --engagement <engagement-id> \
+     --operation network.scan \
+     --target 192.168.1.0/24 \
+     --ports 22,80,443
+
+   PYTHONPATH=src python -m backstabber_cli approval list --status pending
+   PYTHONPATH=src python -m backstabber_cli approval approve --approval <approval-id>
+   PYTHONPATH=src python -m backstabber_cli worker run --once
+   ```
+
+Start the API and dashboard:
+
+   ```bash
+   PYTHONPATH=src python -m backstabber_cli api serve --host 127.0.0.1 --port 8765
+   ```
+
+Open `http://127.0.0.1:8765` in the browser.
 
 ## Main tabs:
 
@@ -101,6 +158,17 @@ Network Scanner — enter IP range and ports then Start Scan.
 ARP Spoofing — choose victim and gateway, then Start ARP Spoof.
 
 Packet Capture — select interface and filter. Optionally enable Start ARP Poison (MITM); capture begins after spoof verification.
+
+Control Plane Dashboard — create engagements, register assets, review dry-run plans, queue jobs, approve work and inspect audit events.
+
+---
+
+## Packaging and CI
+
+- `pyproject.toml` defines installable console scripts: `backstabber`, `backstabberctl` and `backstabber-api`.
+- `requirements.lock` pins the current validated dependency set.
+- `.github/workflows/ci.yml` runs tests, source compilation and a CLI smoke test on Python 3.11 and 3.12.
+- `.github/workflows/release.yml` builds distributions and signs release checksums with Sigstore on `v*` tags.
 
 ---
 

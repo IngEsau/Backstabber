@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Backstabber Control Plane</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <aside class="sidebar">
+      <div class="brand">
+        <img src="/assets/logoBT.png" alt="" onerror="this.style.display='none'">
+        <div>
+          <span>Backstabber</span>
+          <small>Control Plane</small>
+        </div>
+      </div>
+      <nav>
+        <a href="#overview">Overview</a>
+        <a href="#engagements">Engagements</a>
+        <a href="#jobs">Jobs</a>
+        <a href="#approvals">Approvals</a>
+        <a href="#audit">Audit</a>
+      </nav>
+    </aside>
+
+    <main>
+      <header class="topbar">
+        <div>
+          <h1>Operations Dashboard</h1>
+          <p id="status">Loading control plane...</p>
+        </div>
+        <button id="refresh" type="button">Refresh</button>
+      </header>
+
+      <section id="overview" class="metrics"></section>
+
+      <section id="engagements" class="grid two">
+        <form id="engagement-form" class="panel">
+          <h2>New Engagement</h2>
+          <label>Name <input name="name" required placeholder="Lab assessment"></label>
+          <label>Scope CIDRs <input name="scope" required placeholder="192.168.1.0/24,10.0.0.0/24"></label>
+          <label>Description <input name="description" placeholder="Optional context"></label>
+          <label class="check"><input name="approval_required" type="checkbox" checked> Require approvals</label>
+          <button type="submit">Create</button>
+        </form>
+
+        <section class="panel">
+          <h2>Engagements</h2>
+          <div id="engagement-list" class="list"></div>
+        </section>
+      </section>
+
+      <section class="grid two">
+        <form id="asset-form" class="panel">
+          <h2>Asset Registry</h2>
+          <label>Engagement <select name="engagement" required></select></label>
+          <label>Address <input name="address" required placeholder="192.168.1.10"></label>
+          <label>Hostname <input name="hostname" placeholder="host.local"></label>
+          <label>Tags <input name="tags" placeholder="linux,critical"></label>
+          <button type="submit">Save Asset</button>
+        </form>
+
+        <form id="job-form" class="panel">
+          <h2>Network Scan Plan</h2>
+          <label>Engagement <select name="engagement" required></select></label>
+          <label>Target <input name="target" required placeholder="192.168.1.0/24"></label>
+          <label>Ports <input name="ports" required value="1-1024"></label>
+          <label>Interface <input name="iface" placeholder="optional"></label>
+          <div class="actions">
+            <button type="submit" name="mode" value="dry-run">Dry Run</button>
+            <button type="submit" name="mode" value="enqueue">Enqueue</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel">
+        <h2>Dry Run Output</h2>
+        <pre id="plan-output">{}</pre>
+      </section>
+
+      <section id="jobs" class="panel">
+        <h2>Durable Queue</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Created</th><th>Operation</th><th>Status</th><th>Target</th><th>Error</th></tr></thead>
+            <tbody id="jobs-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="approvals" class="panel">
+        <h2>Approvals</h2>
+        <div id="approval-list" class="list"></div>
+      </section>
+
+      <section id="audit" class="panel">
+        <h2>Audit Trail</h2>
+        <div id="audit-list" class="timeline"></div>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

@@ -4,7 +4,7 @@
 # Application configuration
 app:
   name: "Backstabber Toolkit"
-  version: "1.0.0"
+  version: "1.1.0"
   author: "Esaú Aguilar"
   description: "Modular network pentesting tool with graphical interface"
   main_module: "main"
@@ -96,6 +96,15 @@ packet_capture:
     - "udp"
     - "arp"
     - "icmp"
+
+# Control plane configuration
+control_plane:
+  database: "data/backstabber.db"
+  api:
+    host: "127.0.0.1"
+    port: 8765
+  worker:
+    poll_seconds: 2
 
 # Development configuration
 development:
