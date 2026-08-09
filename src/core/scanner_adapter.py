@@ -1,4 +1,6 @@
 from typing import Dict, List, Optional
+import os
+import shlex
 import subprocess
 import xml.etree.ElementTree as ET
 import shutil
@@ -23,6 +25,26 @@ class BaseScanner:
         raise NotImplementedError
 
 
+def can_use_syn_scan() -> bool:
+    return hasattr(os, "geteuid") and os.geteuid() == 0
+
+
+def default_tcp_scan_flag() -> str:
+    return "-sS" if can_use_syn_scan() else "-sT"
+
+
+def build_nmap_command(
+    nmap_path: str,
+    target: str,
+    ports: str = "1-1024",
+    extra_args: str = "",
+) -> List[str]:
+    extra = shlex.split(extra_args) if extra_args else []
+    has_scan_type = any(arg in {"-sS", "-sT"} for arg in extra)
+    scan_flags = [] if has_scan_type else [default_tcp_scan_flag()]
+    return [nmap_path, *scan_flags, *extra, "-p", ports, "-oX", "-", target]
+
+
 class SubprocessNmapScanner(BaseScanner):
     """
     Scanner implementation that runs the nmap binary with -oX - (XML stdout)
@@ -37,10 +59,8 @@ class SubprocessNmapScanner(BaseScanner):
             raise FileNotFoundError("nmap binary not found in PATH. Please install nmap.")
 
     def scan(self, target: str, ports: str = "1-1024", extra_args: str = "") -> Dict:
-        # Build nmap command: TCP SYN scan (-sS), XML output to stdout (-oX -)
-        cmd = [self.nmap_path, "-sS", "-p", ports, "-oX", "-", target]
-        if extra_args:
-            cmd[1:1] = extra_args.split()  # insert extra args after binary
+        # Use SYN scan when privileged, otherwise TCP connect scan.
+        cmd = build_nmap_command(self.nmap_path, target, ports=ports, extra_args=extra_args)
         proc = subprocess.run(cmd, capture_output=True, text=True)
         xml_out = proc.stdout or ""
         # If nmap returned error on stderr, include it in raw output for debugging

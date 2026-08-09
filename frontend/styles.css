@@ -1,13 +1,13 @@
 :root {
   color-scheme: dark;
-  --bg: #101418;
+  --bg: #060408;
   --panel: #171d23;
   --panel-2: #1f2730;
   --line: #2b3642;
   --text: #e6edf3;
   --muted: #8fa1b3;
-  --accent: #38bdf8;
-  --accent-2: #22c55e;
+  --accent: #6221b6;
+  --accent-2: #e194ff;
   --warn: #f59e0b;
   --danger: #ef4444;
 }
@@ -188,7 +188,7 @@ button {
 button {
   background: var(--accent);
   border-color: transparent;
-  color: #03111a;
+  color: #f0f9ff;
   font-weight: 700;
   cursor: pointer;
 }

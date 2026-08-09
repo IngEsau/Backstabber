@@ -112,6 +112,11 @@ def cmd_job_list(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_job_requeue(args: argparse.Namespace) -> int:
+    emit(build_plane(args).requeue_job(args.job, actor=args.actor, reason=args.reason or ""))
+    return 0
+
+
 def cmd_approval_list(args: argparse.Namespace) -> int:
     emit(build_plane(args).list_approvals(status=args.status))
     return 0
@@ -143,9 +148,18 @@ def cmd_overview(args: argparse.Namespace) -> int:
 
 
 def cmd_worker_run(args: argparse.Namespace) -> int:
-    worker = JobWorker(build_plane(args))
+    plane = build_plane(args)
+    worker = JobWorker(plane)
     if args.once:
-        emit(worker.run_once() or {"status": "idle"})
+        result = worker.run_once()
+        if result is not None:
+            emit(result)
+            return 0
+        running = plane.list_jobs(status="running")
+        if running:
+            emit({"status": "busy", "message": "No queued jobs; existing jobs are already running.", "running_jobs": running})
+            return 0
+        emit({"status": "idle"})
         return 0
     worker.run_forever(poll_seconds=args.poll_seconds)
     return 0
@@ -217,6 +231,10 @@ def build_parser() -> argparse.ArgumentParser:
     job_list = job_sub.add_parser("list")
     job_list.add_argument("--status")
     job_list.set_defaults(func=cmd_job_list)
+    job_requeue = job_sub.add_parser("requeue")
+    job_requeue.add_argument("--job", required=True)
+    job_requeue.add_argument("--reason", default="")
+    job_requeue.set_defaults(func=cmd_job_requeue)
 
     approval = sub.add_parser("approval", help="Manage approvals")
     approval_sub = approval.add_subparsers(dest="action", required=True)

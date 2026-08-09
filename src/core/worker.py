@@ -47,8 +47,9 @@ class JobWorker:
 
         target = payload["target"]
         ports = payload["ports"]
+        extra_args = "-Pn" if payload.get("skip_host_discovery") else ""
         scanner = get_default_scanner(prefer="subprocess")
-        result = scanner.scan(target, ports=ports)
+        result = scanner.scan(target, ports=ports, extra_args=extra_args)
         hosts = result.get("hosts", []) if isinstance(result, dict) else []
         return {
             "target": target,

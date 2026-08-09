@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional
 
 from .persistence import Database, decode_json, encode_json, new_id, utc_now
+from .scanner_adapter import build_nmap_command
 from .scope_policy import ScopePolicy, ScopePolicyError
 
 
@@ -377,6 +378,44 @@ class ControlPlane:
         self.db.audit(actor, "approval.rejected", "approval", approval_id, {"job_id": approval["job_id"]})
         return {"approval": self.get_approval(approval_id), "job": self.get_job(approval["job_id"])}
 
+    def requeue_job(self, job_id: str, actor: str = "local", reason: str = "") -> Dict[str, Any]:
+        job = self.get_job(job_id)
+        if job["status"] not in {"running", "failed"}:
+            raise ControlPlaneError(f"job must be running or failed to requeue: {job_id}")
+
+        now = utc_now()
+        note = reason.strip() or "operator requested requeue"
+        running_executions = self.db.fetch_all(
+            "SELECT id FROM executions WHERE job_id = ? AND status = 'running'",
+            (job_id,),
+        )
+        for execution in running_executions:
+            self.db.execute(
+                """
+                UPDATE executions
+                SET status = 'failed', completed_at = ?, error = ?
+                WHERE id = ?
+                """,
+                (now, f"requeued: {note}", execution["id"]),
+            )
+
+        self.db.execute(
+            """
+            UPDATE jobs
+            SET status = 'queued', last_error = NULL, updated_at = ?
+            WHERE id = ?
+            """,
+            (now, job_id),
+        )
+        self.db.audit(
+            actor,
+            "job.requeued",
+            "job",
+            job_id,
+            {"reason": note, "previous_status": job["status"], "executions_closed": len(running_executions)},
+        )
+        return self.get_job(job_id)
+
     def claim_next_job(self) -> Optional[Dict[str, Any]]:
         now = utc_now()
         cur = self.db.conn.execute(
@@ -541,6 +580,7 @@ class ControlPlane:
                 "target": str(target_network),
                 "ports": ",".join(str(port) for port in port_list),
                 "port_count": len(port_list),
+                "skip_host_discovery": self._should_skip_host_discovery(payload, target_network),
             }
             iface = str(payload.get("iface") or "").strip()
             if iface:
@@ -576,7 +616,8 @@ class ControlPlane:
     def _actions_for(self, operation: str, payload: Dict[str, Any]) -> List[Dict[str, Any]]:
         if operation == "network.scan":
             nmap_bin = shutil.which("nmap") or "nmap"
-            command = [nmap_bin, "-sS", "-p", payload["ports"], "-oX", "-", payload["target"]]
+            extra_args = "-Pn" if payload.get("skip_host_discovery") else ""
+            command = build_nmap_command(nmap_bin, payload["target"], ports=payload["ports"], extra_args=extra_args)
             return [
                 {
                     "type": "scope_check",
@@ -587,7 +628,7 @@ class ControlPlane:
                     "type": "command",
                     "argv": command,
                     "shell_preview": " ".join(shlex.quote(part) for part in command),
-                    "requires_raw_socket_or_root": True,
+                    "requires_raw_socket_or_root": "-sS" in command,
                 },
                 {
                     "type": "persist",
@@ -626,6 +667,18 @@ class ControlPlane:
             return ipaddress.ip_network(value.strip(), strict=False)
         except Exception as exc:
             raise ControlPlaneError(f"invalid network target '{value}': {exc}") from exc
+
+    def _should_skip_host_discovery(
+        self,
+        payload: Dict[str, Any],
+        network: ipaddress._BaseNetwork,
+    ) -> bool:
+        value = payload.get("skip_host_discovery")
+        if value is None:
+            return network.num_addresses == 1
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in {"1", "true", "yes", "on", "pn", "-pn"}
 
     def _parse_ip_address(self, value: str) -> ipaddress._BaseAddress:
         try:

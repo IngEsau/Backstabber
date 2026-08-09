@@ -40,12 +40,13 @@ class ControlPlaneTest(unittest.TestCase):
     def test_dry_run_records_execution_without_creating_job(self):
         engagement = self.plane.create_engagement("Lab", ["192.0.2.0/24"])
 
-        plan = self.plane.build_plan(
-            engagement["id"],
-            "network.scan",
-            {"target": "192.0.2.0/24", "ports": "22,80"},
-            dry_run=True,
-        )
+        with mock.patch("core.scanner_adapter.os.geteuid", return_value=1000):
+            plan = self.plane.build_plan(
+                engagement["id"],
+                "network.scan",
+                {"target": "192.0.2.10/32", "ports": "22,80"},
+                dry_run=True,
+            )
         execution = self.plane.record_dry_run(
             engagement["id"],
             "network.scan",
@@ -56,6 +57,12 @@ class ControlPlaneTest(unittest.TestCase):
         self.assertTrue(plan["dry_run"])
         self.assertFalse(plan["requires_approval"])
         self.assertEqual(plan["payload"]["ports"], "22,80")
+        self.assertEqual(plan["payload"]["target"], "192.0.2.10/32")
+        self.assertTrue(plan["payload"]["skip_host_discovery"])
+        command = plan["actions"][1]["argv"]
+        self.assertIn("-sT", command)
+        self.assertIn("-Pn", command)
+        self.assertFalse(plan["actions"][1]["requires_raw_socket_or_root"])
         self.assertEqual(execution["status"], "dry_run")
         self.assertEqual(self.plane.list_jobs(), [])
 
@@ -105,6 +112,27 @@ class ControlPlaneTest(unittest.TestCase):
         self.assertEqual(result["job"]["status"], "succeeded")
         self.assertEqual(result["execution"]["status"], "succeeded")
         self.assertEqual(result["execution"]["result"]["host_count"], 1)
+
+    def test_requeue_closes_running_execution_and_queues_job(self):
+        engagement = self.plane.create_engagement(
+            "Lab",
+            ["192.0.2.0/24"],
+            approval_required=False,
+        )
+        queued = self.plane.enqueue_job(
+            engagement["id"],
+            "network.scan",
+            {"target": "192.0.2.0/24", "ports": "22"},
+        )
+        job = self.plane.claim_next_job()
+        execution = self.plane.start_execution(job)
+
+        requeued = self.plane.requeue_job(queued["job"]["id"], actor="tester", reason="orphaned worker")
+        closed_execution = self.plane.get_execution(execution["id"])
+
+        self.assertEqual(requeued["status"], "queued")
+        self.assertEqual(closed_execution["status"], "failed")
+        self.assertIn("orphaned worker", closed_execution["error"])
 
 
 if __name__ == "__main__":
